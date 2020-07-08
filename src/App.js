@@ -17,17 +17,10 @@ class BooksApp extends React.Component {
       this.setState(JSON.parse(savedState))
       return
     }
-
     const books = await BooksAPI.getAll()
-    const read = books.filter(book => book.shelf === 'read')
-    const wantToRead = books.filter(book => book.shelf === "wantToRead")
-    const currentlyReading = books.filter(book => book.shelf === 'currentlyReading')
-    const none = []
+    const bookState = this.splitBooksByCategory(books)
     this.setState({
-      read,
-      wantToRead,
-      currentlyReading,
-      none
+      ...bookState
     })
   }
 
@@ -38,6 +31,20 @@ class BooksApp extends React.Component {
     none: [],
     books: [],
     searchError: ''
+  }
+
+  splitBooksByCategory(books) {
+    const read = books.filter(book => book.shelf === 'read')
+    const wantToRead = books.filter(book => book.shelf === "wantToRead")
+    const currentlyReading = books.filter(book => book.shelf === 'currentlyReading')
+    const none = books.filter(book => book.shelf === 'none')
+
+    return {
+      read,
+      wantToRead,
+      currentlyReading,
+      none
+    }
   }
 
   handleSearchInputChange = async (event) => {
@@ -64,6 +71,27 @@ class BooksApp extends React.Component {
       }
 
       if (result) {
+        const readIds = this.state.read.map(book => book.id)
+        const wantToReadIds = this.state.wantToRead.map(book => book.id)
+        const currentlyReadingIds = this.state.currentlyReading.map(book => book.id)
+        result.forEach(book => {
+          if (readIds.includes(book.id)) {
+            book.shelf = 'read'
+            return
+          }
+
+          if (wantToReadIds.includes(book.id)) {
+            book.shelf = 'wantToRead'
+            return
+          }
+
+          if (currentlyReadingIds.includes(book.id)) {
+            book.shelf = 'currentlyReading'
+            return
+          }
+
+          book.shelf = 'none'
+        })
         this.setState({
           books: result
         })
@@ -74,25 +102,14 @@ class BooksApp extends React.Component {
 
   }
 
-  handleCategoryChange = (event, book) => {
-    const category = event.target.value;
+  handleCategoryChange = async (event, book) => {
+    const shelf = event.target.value;
+    await BooksAPI.update(book, shelf)
+    const books = await BooksAPI.getAll()
+    const bookState = this.splitBooksByCategory(books)
 
-    this.setState((state) => {
-      const bookShelf = state[book.shelf] ? state[book.shelf] : []
-
-      return {
-        ...state,
-        [book.shelf]: [
-          ...bookShelf.filter(b => b.id !== book.id)
-        ],
-        [category]: [
-          ...state[category],
-          {
-            ...book,
-            'shelf': category
-          }
-        ]
-      }
+    this.setState({
+      ...bookState
     }, () => {
       localStorage.setItem('state', JSON.stringify({ ...this.state, books: [] }));
     })
